@@ -6,11 +6,12 @@
 # ⚠  Keep this file SECRET-FREE: keys come from the environment via key_env (below)
 #    and via compose.yml. Do not paste API keys here.
 
-# ── Primary model: Fireworks DeepSeek V4 Flash (custom OpenAI-compatible) ──────
+# ── Primary model: Fireworks DeepSeek V4 Pro (custom OpenAI-compatible) ────────
 # Custom primary MUST be config-driven (no HERMES_INFERENCE_BASE_URL env exists).
 # The key is read from the FIREWORKS_API_KEY env var named by key_env.
+# (Swap -pro → -flash for a cheaper/faster agent: ~$0.14/$0.28, 1M ctx.)
 model:
-  default: accounts/fireworks/models/deepseek-v4-flash
+  default: accounts/fireworks/models/deepseek-v4-pro
   provider: custom
   base_url: https://api.fireworks.ai/inference/v1
   key_env: FIREWORKS_API_KEY
@@ -21,6 +22,15 @@ fallback_providers:
   model: deepseek-ai/DeepSeek-V4-Pro
   base_url: https://api.together.xyz/v1
   key_env: TOGETHER_API_KEY
+
+# ── Sub-agent delegation ──────────────────────────────────────────────────────
+# Pin delegation to the same Fireworks endpoint — otherwise Hermes may default it
+# to a provider you have no key for (e.g. OpenRouter), and every sub-agent spawn 401s.
+delegation:
+  model: accounts/fireworks/models/deepseek-v4-pro
+  provider: custom
+  base_url: https://api.fireworks.ai/inference/v1
+  key_env: FIREWORKS_API_KEY
 
 # ── Channels ──────────────────────────────────────────────────────────────────
 # new-agent.sh sets these to true/false based on which tokens you put in agent.env.

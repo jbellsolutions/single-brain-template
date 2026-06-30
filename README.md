@@ -14,7 +14,7 @@ This is the parameterized, secret-free distillation of the `single-brain` produc
                                                         └▶ Notion (5 mirrored DBs)   [opt-in]
 ```
 
-- **Resilient inference** — Fireworks DeepSeek-V4-Flash primary, automatic Together fallback on rate-limit/5xx/auth/connection errors. No single provider can take the agent down.
+- **Resilient inference** — Fireworks DeepSeek-V4-Pro primary (+ delegation), automatic Together fallback on rate-limit/5xx/auth/connection errors. No single provider can take the agent down. (Swap to `-flash` for a cheaper/faster agent.)
 - **Obsidian-native memory** — the sync daemon mirrors everything the agent does to a git-backed vault you can open in Obsidian, and to Notion.
 - **Survives restarts** — `/opt/data` is bind-mounted, so `docker compose up --force-recreate` never wipes history.
 - **Self-healing** — a watchdog restarts the container if it dies.
