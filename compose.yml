@@ -10,7 +10,15 @@
 
 services:
   hermes:
-    image: nousresearch/hermes-agent:latest
+    # Pinned to the known-good build (2026-05-04) that single-brain runs in production,
+    # so every clone reproduces the proven setup instead of whatever :latest is today.
+    # ⚠ UPGRADING: newer images switched to an s6-overlay `/init` entrypoint that is
+    # INCOMPATIBLE with the `entrypoint: [/init-chown.sh]` override below (it chains to a
+    # now-deprecated docker/entrypoint.sh and the container won't start CMD → crash loop).
+    # To move to a newer image: bump this digest, DROP the `entrypoint:` override (the new
+    # /init handles bootstrap + CMD), confirm the ui-tui/EACCES + HOME fixes are still
+    # needed, and re-test on a throwaway box before rolling out.
+    image: nousresearch/hermes-agent@sha256:34cdda188b55df3d34df968c63d54ae8cb64206d9865162da275924f1263ede5
     container_name: ${AGENT_NAME}
     restart: unless-stopped
     init: true

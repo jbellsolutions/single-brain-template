@@ -23,12 +23,14 @@ fallback_providers:
   key_env: TOGETHER_API_KEY
 
 # ── Channels ──────────────────────────────────────────────────────────────────
-# Enable the ones you have tokens for (tokens come from .env via compose).
+# new-agent.sh sets these to true/false based on which tokens you put in agent.env.
+# The gateway exits (and crash-loops) if NO enabled channel connects, so a channel
+# with no token must be left disabled.
 platforms:
   slack:
-    enabled: true
+    enabled: __SLACK_ENABLED__
   telegram:
-    enabled: true
+    enabled: __TELEGRAM_ENABLED__
 
 # Auto-accept tool hooks (matches single-brain's operator posture).
 hooks_auto_accept: true

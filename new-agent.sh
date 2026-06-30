@@ -26,6 +26,15 @@ case "${FIREWORKS_API_KEY}" in fw_*) :;; *) echo "WARN: FIREWORKS_API_KEY doesn'
 
 echo "▸ Provisioning agent '$AGENT_NAME' at $BASE_DIR"
 
+# Enable only channels that have a token. The gateway exits/crash-loops if NO
+# enabled channel connects, so never enable a channel without its token.
+SLACK_ENABLED=$([ -n "${SLACK_BOT_TOKEN:-}" ] && echo true || echo false)
+TELEGRAM_ENABLED=$([ -n "${TELEGRAM_BOT_TOKEN:-}" ] && echo true || echo false)
+if [ "$SLACK_ENABLED" = false ] && [ "$TELEGRAM_ENABLED" = false ]; then
+  echo "  ⚠  No SLACK_BOT_TOKEN or TELEGRAM_BOT_TOKEN set — the gateway needs ≥1 connected"
+  echo "     channel to stay up. Add at least one channel token to $CFG before launching."
+fi
+
 # ── lay down the stack ────────────────────────────────────────────────────────
 mkdir -p "$BASE_DIR"/{bin,sync,hermes/data,vault/daily-logs,logs}
 cp "$TEMPLATE_DIR/compose.yml"              "$BASE_DIR/compose.yml"
@@ -52,6 +61,8 @@ if [ -f "$CONFIG_DST" ]; then
   echo "  · keeping existing $CONFIG_DST (Hermes-managed; not overwritten)"
 else
   sed -e "s#__AGENT_PERSONA__#${AGENT_PERSONA:-technical}#g" \
+      -e "s#__SLACK_ENABLED__#${SLACK_ENABLED}#g" \
+      -e "s#__TELEGRAM_ENABLED__#${TELEGRAM_ENABLED}#g" \
       -e "s#__TELEGRAM_HOME_CHANNEL__#${TELEGRAM_HOME_CHANNEL:-}#g" \
       -e "s#__SLACK_HOME_CHANNEL__#${SLACK_HOME_CHANNEL:-}#g" \
       "$TEMPLATE_DIR/hermes/config.template.yaml" > "$CONFIG_DST"

@@ -45,6 +45,10 @@ docker exec "$AGENT_NAME" /opt/hermes/.venv/bin/hermes fallback list   # primary
 
 That's it. Repeat steps 2–5 with a different `AGENT_NAME` / `BASE_DIR` / `HERMES_PORT` to run more agents — on the same VPS or a new one.
 
+### Channels
+
+`new-agent.sh` enables only the channels you provide a token for (Slack needs `SLACK_BOT_TOKEN`+`SLACK_APP_TOKEN`; Telegram needs `TELEGRAM_BOT_TOKEN`). Enabling a channel **without** its token crash-loops the gateway, so don't. With **no** channel tokens the agent runs **headless** (cron + web dashboard only, no messaging) — useful for a back-office/scheduled agent.
+
 ## Files
 
 | Path | Role |
