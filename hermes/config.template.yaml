@@ -1,0 +1,55 @@
+# Hermes config seed for a Single-Brain-style agent.
+# new-agent.sh renders this to <BASE_DIR>/hermes/data/config.yaml (HERMES_HOME=/opt/data),
+# substituting the __PLACEHOLDER__ values. On first start Hermes fills in the rest of
+# its defaults (config_version migration) — this seed only sets the non-default bits.
+#
+# ⚠  Keep this file SECRET-FREE: keys come from the environment via key_env (below)
+#    and via compose.yml. Do not paste API keys here.
+
+# ── Primary model: Fireworks DeepSeek V4 Flash (custom OpenAI-compatible) ──────
+# Custom primary MUST be config-driven (no HERMES_INFERENCE_BASE_URL env exists).
+# The key is read from the FIREWORKS_API_KEY env var named by key_env.
+model:
+  default: accounts/fireworks/models/deepseek-v4-flash
+  provider: custom
+  base_url: https://api.fireworks.ai/inference/v1
+  key_env: FIREWORKS_API_KEY
+
+# ── Fallback chain: tried in order on rate-limit / 5xx / auth / connection errors ──
+fallback_providers:
+- provider: custom
+  model: deepseek-ai/DeepSeek-V4-Pro
+  base_url: https://api.together.xyz/v1
+  key_env: TOGETHER_API_KEY
+
+# ── Channels ──────────────────────────────────────────────────────────────────
+# Enable the ones you have tokens for (tokens come from .env via compose).
+platforms:
+  slack:
+    enabled: true
+  telegram:
+    enabled: true
+
+# Auto-accept tool hooks (matches single-brain's operator posture).
+hooks_auto_accept: true
+
+display:
+  personality: __AGENT_PERSONA__
+
+# Home channels the agent can post to proactively. new-agent.sh removes these
+# two lines if the corresponding values in agent.env are blank.
+TELEGRAM_HOME_CHANNEL: '__TELEGRAM_HOME_CHANNEL__'
+SLACK_HOME_CHANNEL: '__SLACK_HOME_CHANNEL__'
+
+# ── MCP servers (tools) ───────────────────────────────────────────────────────
+# Add per-agent tools here AFTER first boot, or seed them below. NOTE: Hermes stores
+# mcp_servers[].env values as LITERAL strings (no ${ENV} expansion), so anything you
+# put here is a cleartext secret in this file — prefer adding tools via the dashboard
+# or keep this file out of git. Example (commented):
+# mcp_servers:
+#   firecrawl:
+#     command: npx
+#     args: ["-y", "firecrawl-mcp"]
+#     env:
+#       FIRECRAWL_API_KEY: "fc-..."   # <- cleartext; handle carefully
+#     timeout: 120

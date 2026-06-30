@@ -1,0 +1,107 @@
+# Single-Brain agent — Hermes gateway (+ optional Obsidian/Notion sync).
+# Parameterized: every per-agent value comes from .env (see agent.example.env).
+# Spin up a new agent with `./new-agent.sh agent.env` — never edit this file per-agent.
+#
+# Core (default):   docker compose up -d              → hermes only
+# + memory mirror:  docker compose --profile sync up -d → hermes + Obsidian/Notion sync
+#
+# Port binds to 127.0.0.1 only. For tailnet access use `tailscale serve ${HERMES_PORT}`
+# (cleaner than hardcoding a host-specific tailscale IP).
+
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: ${AGENT_NAME}
+    restart: unless-stopped
+    init: true
+    stdin_open: true
+    tty: true
+    dns: ["8.8.8.8", "8.8.4.4"]
+    environment:
+      TZ: ${TZ:-America/New_York}
+      # ── Inference ──────────────────────────────────────────────────────────
+      # PRIMARY is config-driven (Fireworks) in hermes/data/config.yaml `model:`.
+      # There is no HERMES_INFERENCE_BASE_URL env, so a custom primary MUST be set
+      # in config, not here. Keys below are resolved by the config `key_env:` fields.
+      FIREWORKS_API_KEY: ${FIREWORKS_API_KEY:?FIREWORKS_API_KEY required (primary)}
+      TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}      # fallback (recommended)
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}  # optional extra fallback
+      HERMES_ACCEPT_HOOKS: "1"
+      # ── Load-bearing fixes for nousresearch/hermes-agent (do NOT remove) ─────
+      # gosu keeps the parent HOME on privilege drop; without this the TUI inherits
+      # HOME=/root, can't read it, and the Chat tab renders blank.
+      HOME: /opt/data
+      # Point at the prebuilt TUI bundle — bypasses an upstream staleness check that
+      # triggers a synchronous npm rebuild on every Chat connect (blocks the event
+      # loop for minutes, times out the websocket handshake).
+      HERMES_TUI_DIR: /opt/hermes/ui-tui
+      # ── Channels (provide tokens for the ones you enable in config.yaml) ─────
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      GATEWAY_ALLOW_ALL_USERS: ${GATEWAY_ALLOW_ALL_USERS:-false}
+    volumes:
+      # CRITICAL: /opt/data holds the session DB, kanban, memories, auth store, and
+      # config.yaml (HERMES_HOME=/opt/data). The image declares VOLUME /opt/data, so
+      # WITHOUT this bind mount every `--force-recreate` orphans an anonymous volume
+      # and wipes all history. The bind mount makes data survive recreates.
+      - ${BASE_DIR}/hermes/data:/opt/data
+      - ${BASE_DIR}/vault:/vault
+      - ${BASE_DIR}/logs:/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${BASE_DIR}/bin/start-hermes.sh:/start-hermes.sh:ro
+      - ${BASE_DIR}/bin/init-chown.sh:/init-chown.sh:ro
+    ports:
+      - "127.0.0.1:${HERMES_PORT:-18789}:9119"
+    networks: [agent_net]
+    mem_limit: ${HERMES_MEM_LIMIT:-2g}
+    cpus: "${HERMES_CPUS:-2.0}"
+    security_opt: ["no-new-privileges:true"]
+    # Root pre-entrypoint: chowns /opt/hermes/ui-tui (EACCES fix) + /opt/data, then
+    # chains to the upstream entrypoint's gosu privilege drop.
+    entrypoint: ["/init-chown.sh"]
+    command: ["/bin/bash", "/start-hermes.sh"]
+    healthcheck:
+      test: ["CMD", "/opt/hermes/.venv/bin/hermes", "gateway", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Obsidian/Notion memory mirror — opt-in (`--profile sync`). Mirrors Hermes
+  # session DB, kanban, memories, and skills to the git-backed vault (Obsidian
+  # markdown) and to Notion every SYNC_INTERVAL_SECONDS. Read-only on /opt/data,
+  # so a Notion outage or sync bug can never slow the agent.
+  sync:
+    build: ./sync
+    container_name: ${AGENT_NAME}-sync
+    profiles: ["sync"]
+    restart: unless-stopped
+    init: true
+    depends_on:
+      hermes:
+        condition: service_started
+    environment:
+      TZ: ${TZ:-America/New_York}
+      # Required when the sync profile is enabled — daemon.py enforces at runtime.
+      # Kept optional here so the CORE agent starts even with Notion unconfigured
+      # (compose interpolates every service's vars regardless of active profile).
+      NOTION_TOKEN: ${NOTION_TOKEN:-}
+      NOTION_DB_SESSIONS: ${NOTION_DB_SESSIONS:-}
+      NOTION_DB_KANBAN_TASKS: ${NOTION_DB_KANBAN_TASKS:-}
+      NOTION_DB_MEMORIES: ${NOTION_DB_MEMORIES:-}
+      NOTION_DB_SKILLS: ${NOTION_DB_SKILLS:-}
+      NOTION_DB_EVENTS: ${NOTION_DB_EVENTS:-}
+      SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-60}
+    volumes:
+      - ${BASE_DIR}/hermes/data:/opt/data:ro   # read-only — daemon never writes here
+      - ${BASE_DIR}/vault:/vault               # canonical Obsidian source
+    networks: [agent_net]
+    mem_limit: 256m
+    cpus: "0.5"
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  agent_net:
+    driver: bridge
+    name: ${AGENT_NAME}-net

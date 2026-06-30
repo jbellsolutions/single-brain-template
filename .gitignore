@@ -1,0 +1,16 @@
+# Secrets — never commit a filled-in agent config
+.env
+agent.env
+*.env
+!agent.example.env
+
+# Per-agent runtime state (when BASE_DIR is inside the repo for local testing)
+hermes/data/
+vault/
+logs/
+*.bak
+
+# OS
+.DS_Store
+__pycache__/
+*.pyc
