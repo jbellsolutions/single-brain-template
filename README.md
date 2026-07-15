@@ -60,8 +60,9 @@ That's it. Repeat steps 2–5 with a different `AGENT_NAME` / `BASE_DIR` / `HERM
 | `hermes/config.template.yaml` | Hermes config seed (Fireworks primary, Together fallback, channels, persona). |
 | `bin/init-chown.sh` | Root pre-entrypoint — fixes upstream EACCES/ownership bugs. **Load-bearing.** |
 | `bin/start-hermes.sh` | Launches the dashboard + gateway. |
-| `bin/watchdog.sh` | Cron self-healer (rendered per agent). |
+| `bin/watchdog.sh` | Cron self-healer (rendered per agent). Restarts on exit **and** on a wedged `running`-but-`unhealthy` container; logging can never block a restart. |
 | `sync/` | Obsidian/Notion mirror daemon (stdlib-only Python) + Notion DB creator. |
+| `docs/TROUBLESHOOTING.md` | Runtime symptom → cause → fix, plus fast diagnostics. Read when an agent misbehaves. |
 
 ## Notion mirror (optional)
 
