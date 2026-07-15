@@ -81,6 +81,51 @@ These are baked into `compose.yml` / `bin/` — don't strip them:
 - **`HERMES_TUI_DIR=/opt/hermes/ui-tui`** — bypasses a staleness check that otherwise triggers a synchronous npm rebuild on every Chat connect.
 - **Custom primary is config-driven** — there is no `HERMES_INFERENCE_BASE_URL`; a custom OpenAI-compatible primary must be set in `config.yaml`'s `model:` block, and `HERMES_INFERENCE_*` env vars must not override it.
 
+## Provider outage / failover runbook
+
+The agent fails over **automatically**: Fireworks (primary) → Together → OpenRouter
+(if you set its key). Ported from single-brain's `docs/recovery.md` — no action
+needed for brief outages.
+
+```bash
+# Confirm the chain the live agent actually loaded:
+docker exec "$AGENT_NAME" /opt/hermes/.venv/bin/hermes fallback list
+
+# See failovers happening (Hermes logs the provider swap per turn):
+docker compose logs "$AGENT_NAME" | grep -iE "fallback|provider"
+```
+
+If failover is NOT happening:
+
+1. Keys in the live env? `grep -E "FIREWORKS|TOGETHER|OPENROUTER" $BASE_DIR/.env`
+2. Keys inside the container? `docker exec "$AGENT_NAME" printenv | grep -E "FIREWORKS|TOGETHER|OPENROUTER"`
+   (if missing: fix `.env`, then `docker compose up -d --force-recreate`)
+3. Smoke-test each provider directly:
+   ```bash
+   source "$BASE_DIR/.env"
+   curl -s https://api.fireworks.ai/inference/v1/chat/completions \
+     -H "Authorization: Bearer $FIREWORKS_API_KEY" -H "Content-Type: application/json" \
+     -d '{"model":"accounts/fireworks/models/deepseek-v4-pro","messages":[{"role":"user","content":"ping"}],"max_tokens":1}'
+   curl -s https://api.together.xyz/v1/chat/completions \
+     -H "Authorization: Bearer $TOGETHER_API_KEY" -H "Content-Type: application/json" \
+     -d '{"model":"deepseek-ai/DeepSeek-V4-Pro","messages":[{"role":"user","content":"ping"}],"max_tokens":1}'
+   ```
+   `200` + completion = provider good · `401` = bad/rotated key · `404` = model slug
+   changed (update `hermes/data/config.yaml` and recreate).
+
+To rotate a key: edit `$BASE_DIR/.env`, then `docker compose up -d --force-recreate`.
+Keys live only in `.env` (mode 600) — never in config files.
+
+## Staying in sync with single-brain
+
+This template is a curated port of [single-brain](https://github.com/jbellsolutions/single-brain)
+(Hermes-only, parameterized), so upstream changes are **ported, not mirrored**.
+A daily GitHub Action ([`upstream-watch`](.github/workflows/upstream-watch.yml))
+diffs the watched upstream paths (compose, hermes config, watchdog, env example,
+key docs) against `.sync/last-synced-sha` and opens a **"Port upstream single-brain
+changes"** issue here with the commits + diff whenever something new lands.
+Port what applies, close the issue. Run it on demand from the Actions tab.
+
 ## Security
 
 - `agent.env` / `.env` are gitignored. Never commit a filled-in copy.

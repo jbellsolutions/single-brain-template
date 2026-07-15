@@ -1,0 +1,100 @@
+# Upstream watch — keeps this template in sync with jbellsolutions/single-brain.
+#
+# The template is a curated PORT of single-brain (parameterized, Hermes-only),
+# not a file mirror, so changes can't be auto-copied. Instead this workflow
+# diffs the watched upstream paths daily and opens ONE issue per batch of new
+# upstream changes, with the commits + diff inline, so nothing lands in
+# single-brain without a visible "port me" marker here. `.sync/last-synced-sha`
+# records the last upstream commit already reflected in the template — the
+# workflow bumps it after filing the issue so each change is flagged once.
+#
+# Both repos are public, so the default GITHUB_TOKEN needs no extra secrets.
+
+name: upstream-watch
+on:
+  schedule:
+    - cron: "17 13 * * *"   # daily 13:17 UTC (9:17 ET)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Diff upstream watched paths
+        id: diff
+        run: |
+          set -euo pipefail
+          UPSTREAM=https://github.com/jbellsolutions/single-brain.git
+          WATCHED="compose.yml hermes/config/config.yaml .env.example bin/watchdog.sh docs/architecture.md docs/recovery.md docs/setup.md"
+          LAST=$(cat .sync/last-synced-sha)
+
+          git clone --quiet --filter=blob:none "$UPSTREAM" /tmp/upstream
+          cd /tmp/upstream
+          HEAD_SHA=$(git rev-parse HEAD)
+          echo "head=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          if [ "$HEAD_SHA" = "$LAST" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # shellcheck disable=SC2086
+          git log --oneline --no-merges "$LAST..$HEAD_SHA" -- $WATCHED > /tmp/commits.txt || true
+          if [ ! -s /tmp/commits.txt ]; then
+            # Upstream moved but not in watched paths (vault syncs, daily logs):
+            # silently record the new sha so we don't rescan the same range.
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "bump=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          # shellcheck disable=SC2086
+          git diff "$LAST..$HEAD_SHA" -- $WATCHED > /tmp/watched.diff
+          head -c 60000 /tmp/watched.diff > /tmp/watched.trimmed.diff
+
+      - name: Open port-me issue
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.diff.outputs.head }}
+        run: |
+          set -euo pipefail
+          LAST=$(cat .sync/last-synced-sha)
+          {
+            echo "Upstream [single-brain](https://github.com/jbellsolutions/single-brain) changed watched files since \`${LAST:0:7}\`."
+            echo
+            echo "**Commits**"
+            echo '```'
+            cat /tmp/commits.txt
+            echo '```'
+            echo
+            echo "**Diff of watched paths** ([full compare](https://github.com/jbellsolutions/single-brain/compare/${LAST}...${HEAD_SHA}))"
+            echo '<details><summary>diff</summary>'
+            echo
+            echo '```diff'
+            cat /tmp/watched.trimmed.diff
+            echo '```'
+            echo '</details>'
+            echo
+            echo "Port what applies (this template is Hermes-only + parameterized), then close."
+          } > /tmp/issue.md
+          gh issue create \
+            --title "Port upstream single-brain changes (${LAST:0:7}..${HEAD_SHA:0:7})" \
+            --body-file /tmp/issue.md \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Record synced sha
+        if: steps.diff.outputs.changed == 'true' || steps.diff.outputs.bump == 'true'
+        env:
+          HEAD_SHA: ${{ steps.diff.outputs.head }}
+        run: |
+          set -euo pipefail
+          echo "$HEAD_SHA" > .sync/last-synced-sha
+          git config user.name "upstream-watch"
+          git config user.email "actions@github.com"
+          git add .sync/last-synced-sha
+          git commit -m "sync: record upstream single-brain @ ${HEAD_SHA:0:7}"
+          git push

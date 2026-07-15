@@ -22,6 +22,14 @@ fallback_providers:
   model: deepseek-ai/DeepSeek-V4-Pro
   base_url: https://api.together.xyz/v1
   key_env: TOGETHER_API_KEY
+# __OPENROUTER_FALLBACK_START__
+# Optional third hop — new-agent.sh strips this entry when OPENROUTER_API_KEY is
+# blank in agent.env, so it only ships on agents that actually have the key.
+- provider: custom
+  model: deepseek/deepseek-v4-pro
+  base_url: https://openrouter.ai/api/v1
+  key_env: OPENROUTER_API_KEY
+# __OPENROUTER_FALLBACK_END__
 
 # ── Sub-agent delegation ──────────────────────────────────────────────────────
 # Pin delegation to the same Fireworks endpoint — otherwise Hermes may default it

@@ -69,8 +69,16 @@ else
   # drop empty home-channel lines so we don't seed blank keys
   [ -z "${TELEGRAM_HOME_CHANNEL:-}" ] && sed -i.bak "/^TELEGRAM_HOME_CHANNEL: ''$/d" "$CONFIG_DST"
   [ -z "${SLACK_HOME_CHANNEL:-}" ]    && sed -i.bak "/^SLACK_HOME_CHANNEL: ''$/d"    "$CONFIG_DST"
+  # OpenRouter is an optional third fallback: keep the entry only when its key is set
+  if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+    sed -i.bak "/__OPENROUTER_FALLBACK_START__/,/__OPENROUTER_FALLBACK_END__/d" "$CONFIG_DST"
+    FALLBACKS="Together"
+  else
+    sed -i.bak -e "/__OPENROUTER_FALLBACK_START__/d" -e "/__OPENROUTER_FALLBACK_END__/d" "$CONFIG_DST"
+    FALLBACKS="Together → OpenRouter"
+  fi
   rm -f "$CONFIG_DST.bak"
-  echo "  · seeded $CONFIG_DST (Fireworks primary + Together fallback, persona=${AGENT_PERSONA:-technical})"
+  echo "  · seeded $CONFIG_DST (Fireworks primary, fallbacks: $FALLBACKS, persona=${AGENT_PERSONA:-technical})"
 fi
 
 cat <<EOF
